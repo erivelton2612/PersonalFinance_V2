@@ -8,6 +8,8 @@ if "token" not in st.session_state or not st.session_state.token:
     # st.stop()
     st.switch_page("app.py")
 
+st.set_page_config(page_title="Importar Arquivo", layout="wide")
+
 # Importação de Arquivo
 st.subheader("Importar Arquivo")
 arquivo = st.file_uploader("Escolha um arquivo CSV, Excel ou JSON", type=["csv", "xlsx", "xls", "json"])

@@ -7,6 +7,7 @@ if "token" not in st.session_state or not st.session_state.token:
     # st.warning("Você precisa estar logado para acessar esta página.")
     # st.stop()
     st.switch_page("app.py")
+st.set_page_config(page_title="Classificações", layout="wide")
 
 st.subheader("Classificações")
 arquivo = st.file_uploader("Escolha um arquivo CSV, Excel ou JSON", type=["csv", "xlsx", "xls", "json"])

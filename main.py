@@ -178,6 +178,24 @@ def listar_extratos(current_user: dict = Depends(get_current_user)):
     df = fetch_df("SELECT * FROM Extrato WHERE user_id = ?", (current_user["id"],))
     return df.to_dict(orient="records")
 
+@app.put("/extrato/{extrato_id}")
+def atualizar_extrato(extrato_id: int, item: ExtratoModel, current_user: dict = Depends(get_current_user)):
+    data = {k: (None if v == "Nenhum" else v) for k, v in item.dict().items()}
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("""
+            UPDATE Extrato SET
+                DataDebito = ?, DataLancamento = ?, MeioPagamento = ?, Lancamento = ?,
+                Ref1 = ?, Ref2 = ?, ref3 = ?, PagoRecebido = ?, ValorPrincipal = ?,
+                ClasseSugerida = ?, Accurace = ?, Classe = ?, Origem = ?
+            WHERE id = ? AND user_id = ?
+        """, (
+            data["DataDebito"], data["DataLancamento"], data["MeioPagamento"], data["Lancamento"],
+            data["Ref1"], data["Ref2"], data["ref3"], data["PagoRecebido"], data["ValorPrincipal"],
+            data["ClasseSugerida"], data["Accurace"], data["Classe"], data["Origem"],
+            extrato_id, current_user["id"]
+        ))
+    return {"message": "Registro atualizado"}
+
 # ROTAS DE CLASSIFICACAO
 @app.post("/classificacao")
 def incluir_classificacao(item: ClassificacaoModel):

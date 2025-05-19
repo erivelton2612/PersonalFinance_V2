@@ -8,6 +8,7 @@ if "token" not in st.session_state or not st.session_state.token:
     # st.stop()
     st.switch_page("app.py")
 
+st.set_page_config(page_title="Analisar Extrato", layout="wide")
 
 st.subheader("Analisar Extrato")
 # if "df_importado" not in st.session_state:
@@ -119,6 +120,27 @@ with col1:
     if st.button("Enviar para API"):
         enviar_dados(edited_df, st.session_state.token)
         st.success("Dados enviados com sucesso!")
+    
+    def enviar_dados(df, token):
+    
+        headers = {"Authorization": f"Bearer {token}"}
+        erros = 0
+        total = len(df)
+        for idx, row in df.iterrows():
+            payload = row.to_dict()
+            extrato_id = payload.get("Id")  # ou "id", conforme sua tabela
+            if extrato_id:
+                try:
+                    response = requests.put(f"{API_URL}/extrato/{extrato_id}", headers=headers, json=payload)
+                    if response.status_code != 200:
+                        erros += 1
+                except Exception:
+                    erros += 1
+            else:
+                erros += 1  # Não tem ID, não pode atualizar
+        st.success(f"Atualização finalizada: {total-erros} de {total} registros atualizados com sucesso. {erros} erro(s) ignorado(s).")
+
+
 with col2:
     if st.button("Voltar"):
         st.switch_page("app.py")
