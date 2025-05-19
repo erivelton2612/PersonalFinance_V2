@@ -3,9 +3,9 @@ import streamlit as st
 import pandas as pd
 import requests
 import Levenshtein
+from parameter import API_URL
 
-
-API_URL = "http://127.0.0.1:8000"
+# API_URL = "http://127.0.0.1:8000"
 # Funções auxiliares
 def autenticar(username, password):
     response = requests.post(f"{API_URL}/token", data={"username": username, "password": password})
