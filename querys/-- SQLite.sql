@@ -1,0 +1,4 @@
+-- SQLite
+ALTER TABLE Extrato ADD COLUMN ClasseSugerida TEXT;
+ALTER TABLE Extrato ADD COLUMN Classe TEXT;
+ALTER TABLE Extrato ADD COLUMN Origem TEXT;
