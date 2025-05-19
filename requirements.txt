@@ -1,0 +1,13 @@
+streamlit
+pandas
+streamlit-aggrid
+requests
+python-jose
+passlib
+openpyxl
+xlrd
+fastapi
+uvicorn
+python-Levenshtein
+PyJWT
+bcrypt
