@@ -19,6 +19,11 @@ df = carregar_dados(st.session_state.token)
 if df.empty:
     st.info("Nenhum dado encontrado para este usuário.")
     st.stop()
+else:
+    st.success("Dados carregados com sucesso!")
+    df["DataDebito"] = pd.to_datetime(df["DataDebito"], format="%Y-%m-%d")
+    df["DataLancamento"] = pd.to_datetime(df["DataLancamento"], format="%Y-%m-%d")
+        
 
 
 # Carrega classificações
@@ -39,8 +44,8 @@ edited_df = st.data_editor(
         num_rows="dynamic", 
         use_container_width=True,
         column_config={
-            "DataDebito": st.column_config.TextColumn("Débito",width="small"),
-            "DataLancamento": st.column_config.TextColumn("Lançamento",width="small"),
+            "DataDebito": st.column_config.DateColumn("Débito",width="small"),
+            "DataLancamento": st.column_config.DateColumn("Lançamento",width="small"),
             "MeioPagamento": st.column_config.TextColumn("Meio",width="small"),
             "Lancamento": st.column_config.TextColumn("Lançamento"),
             "Ref1": st.column_config.TextColumn("Ref1",width="small"),
@@ -89,8 +94,8 @@ edited_df = st.data_editor(
         num_rows="dynamic", 
         use_container_width=True,
         column_config={
-            "DataDebito": st.column_config.TextColumn("Débito",width="small"),
-            "DataLancamento": st.column_config.TextColumn("Lançamento",width="small"),
+            "DataDebito": st.column_config.DateColumn("Débito",width="small"),
+            "DataLancamento": st.column_config.DateColumn("Lançamento",width="small"),
             "MeioPagamento": st.column_config.TextColumn("Meio",width="small"),
             "Lancamento": st.column_config.TextColumn("Lançamento"),
             "Ref1": st.column_config.TextColumn("Ref1",width="small"),

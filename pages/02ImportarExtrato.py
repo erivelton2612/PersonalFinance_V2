@@ -29,6 +29,9 @@ if arquivo:
             df = pd.read_excel(arquivo)
     except Exception as e:
         st.error(f"Erro ao ler o arquivo: {e}")
+        
+    data_fixa = None
+    meio_pagamento_fixo = None
 
     st.success("Arquivo carregado com sucesso!")
     usar_data_fixa = st.checkbox("Importar com data fixa para todos")
@@ -39,8 +42,7 @@ if arquivo:
         meio_pagamento_fixo = st.selectbox("Valor padrão para 'MeioPagamento'",
                                         [None, "Crédito", "Débito", 
                                             "Transferência", "Dinheiro", "Cheque", "Boleto", "PIX", "Outros"], index=0)
-    data_fixa = None
-    meio_pagamento_fixo = None
+    
     valor_negativo_recebido = st.checkbox("Valores negativos são recebidos (inverter lógica padrão?)")
 
     colunas_esperadas = ['DataDebito', 'DataLancamento', 'MeioPagamento', 'Lancamento', 'Ref1', 'Ref2', 'ref3', 'PagoRecebido', 'ValorPrincipal', 'ClasseSugerida','Accurace','Classe', 'Origem']
@@ -95,6 +97,10 @@ if arquivo:
     # Ajusta DataDebito para string no formato YYYY-MM-DD antes de enviar
     if 'DataDebito' in edited_df.columns:
         edited_df['DataDebito'] = pd.to_datetime(edited_df['DataDebito'], errors='coerce',dayfirst=True).dt.strftime('%Y-%m-%d')
+    
+    # Ajusta DataLancamento para string no formato YYYY-MM-DD antes de enviar
+    if 'DataLancamento' in edited_df.columns:
+        edited_df['DataLancamento'] = pd.to_datetime(edited_df['DataLancamento'], errors='coerce',dayfirst=True).dt.strftime('%Y-%m-%d')
 
     # Troca "Nenhum" por None (NaN) para evitar erro na API
     edited_df = edited_df.replace("Nenhum", None)

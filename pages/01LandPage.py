@@ -4,6 +4,7 @@ import pandas as pd
 from backend.function import *
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode, GridUpdateMode
 import plotly.express as px
+import numpy as np
 
 
 # LandPage.py
@@ -15,13 +16,40 @@ st.write("Bem-vindo ao sistema de classificação. Selecione uma opção no menu
 # st.sidebar.markdown("- [Importar Extrato](pages/ImportarExtrato.py)")
 # st.sidebar.markdown("- [Classificações](pages/Classificacao.py)")
 
+try:
+    if "token" not in st.session_state or not st.session_state.token:
+        st.warning("Você precisa estar logado para acessar esta página.")
+        st.stop()
+except:
+    st.warning("Você precisa estar logado para acessar esta página.")
+    st.stop()
 
-df = pd.DataFrame()
-df = carregar_dados(st.session_state.token)
+st.sidebar.success(f"Autenticado como {st.session_state.username}")
+
+try:
+    df = pd.DataFrame()
+    df = carregar_dados(st.session_state.token)
+    if df is None or df.empty:
+        st.error("Erro ao carregar dados. Tente novamente.")
+        # Opcional: tentar novamente automaticamente
+        # df = carregar_dados(st.session_state.token)
+    else:
+        st.success("Dados carregados com sucesso!")
+        df["DataDebito"] = pd.to_datetime(df["DataDebito"], format="%Y-%m-%d")
+        df["DataLancamento"] = pd.to_datetime(df["DataLancamento"], format="%Y-%m-%d")
+except Exception as e:
+    st.error(f"Erro ao carregar dados: {e}")
+    try:
+        df = carregar_dados(st.session_state.token)
+    except Exception as e2:
+        st.error(f"Erro ao tentar novamente: {e2}")
+        st.stop()
+
 df["Detalhes"] = "Ver detalhes"
 lendf = len(df)
 revisaomanual = len(df[(df['Accurace'] > 11) & (df['Classe'].isna())])
 semclasse = len(df[df['Classe'].isna()])
+
 
 a, b ,c = st.columns(3)
 
@@ -31,7 +59,183 @@ c.metric(label="Revisâo Manual", value=f"{revisaomanual}", border=True)
 
 tab1, tab2, tab3 = st.tabs(["Resumo", "Tabela", "Gráficos"])
 
+
 with tab1:
+    #########
+    
+    st.table(df)
+    # # Simulando dados
+    # df = pd.DataFrame({
+    #     "DataLancamento": pd.date_range(start="2025-01-01", periods=90, freq="D"),
+    #     "Classe": ['Alimentacao', 'Transporte', 'Lazer', 'Mercado', 'Delivery'] * 18,
+    #     "ValorPrincipal": np.random.randint(10, 200, size=90)
+    # })
+
+    # Adiciona coluna de Mês no formato YYYY-MM
+
+    df["Mes"] = df["DataLancamento"].dt.to_period("M").astype(str)
+    
+    # Pivot: Classe nas linhas, Mes nas colunas
+    df_pivot = pd.pivot_table(
+        df,
+        index="Classe",
+        columns="Mes",
+        values="ValorPrincipal", 
+        aggfunc="sum",
+        fill_value=0
+    ).reset_index()
+
+    # Obtem lista de meses ordenada
+    meses_disponiveis = df["Mes"].sort_values().unique().tolist()
+
+    # Filtro de meses
+    meses_selecionados = st.multiselect("Filtrar meses:", meses_disponiveis, default=meses_disponiveis)
+
+
+   
+    # Só calcula totais e variação se houver pelo menos dois meses selecionados
+
+    df_pivot['Total'] = df_pivot[meses_selecionados].sum(axis=1)
+    # df_pivot['Variacao'] = df_pivot[meses_disponiveis[-1]] - df_pivot[meses_disponiveis[-2]]
+    # df_pivot['Icone'] = df_pivot['Variacao'].apply(lambda x: '🍀' if x > 0 else ('🔻' if x < 0 else '➡️'))
+    
+    
+    colunas_final = ["Classe"] + meses_disponiveis + ["Total", "Variacao", "Icone"]
+    df_mostrar = df_pivot[colunas_final]
+    # Mostrar total geral
+    with st.container(border = True):
+        total_geral = df_mostrar[meses_selecionados].sum().sum()
+        st.metric("Total Geral dos Gastos Filtrados", f"R$ {total_geral:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+    # AgGrid
+    formatter_real = "(params.value != null) ? 'R$ ' + params.value.toFixed(2) : ''"
+
+    # # Modal com detalhes
+    value_formatter = JsCode("""
+    function(params) {
+        if (params.value != null) {
+            return 'R$ ' + params.value.toFixed(2);
+        } else {
+            return '';
+        }
+    }
+    """)
+
+    gb = GridOptionsBuilder.from_dataframe(df_mostrar)
+    gb.configure_default_column(editable=False, resizable=True)
+    for mes in meses_selecionados:
+        gb.configure_column(mes, type=["numericColumn"], 
+                            valueFormatter=formatter_real, 
+                            cellRenderer=value_formatter,
+                            cellStyle={'textAlign': 'right'})
+    gb.configure_column("Total", type=["numericColumn"], valueFormatter=value_formatter, cellStyle={'textAlign': 'right','fontWeight': 'bold'})
+    gb.configure_column("Variacao", valueFormatter=formatter_real, hide = True, cellStyle={'textAlign': 'right'})
+    gb.configure_column("Icone", headerName="Tendência", cellStyle={'textAlign': 'center'})
+    gb.configure_column("Classe", cellStyle={'textAlign': 'left','fontWeight': 'bold'})
+    
+
+
+    AgGrid(
+        df_mostrar,
+        gridOptions=gb.build(),
+        enable_enterprise_modules=True,
+        allow_unsafe_jscode=True,
+        theme="material",
+        fit_columns_on_grid_load=True,
+    )
+
+    # Obs: para implementar modal real, seria necessário integrar com frontend customizado. Aqui, usamos o efeito de hover + estilo clicável para simular.
+
+with tab2:
+        # app.py
+    import streamlit as st
+    import pandas as pd
+    from backend.function import *
+    from st_aggrid import AgGrid, GridOptionsBuilder, JsCode, GridUpdateMode
+    import plotly.express as px
+    import numpy as np
+
+    import pandas as pd
+    import streamlit as st
+    from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+
+    # Simulando dados
+    df = pd.DataFrame({
+        'DataLancamento': pd.date_range(start='2024-01-01', periods=12, freq='W'),
+        'Classe': ['Alimentação', 'Transporte', 'Lazer'] * 4,
+        'Lancamento': ['Padaria', 'Uber', 'Cinema', 'Restaurante', 'Ônibus', 'Bar', 'Mercado', 'Gasolina', 'Parque', 'Delivery', 'Táxi', 'Teatro'],
+        'MeioPagamento': ['Cartão'] * 12,
+        'ValorPrincipal': [30, 15, 45, 60, 10, 35, 120, 50, 20, 80, 25, 90]
+    })
+
+    # Garantir tipo numérico
+    df["ValorPrincipal"] = pd.to_numeric(df["ValorPrincipal"], errors="coerce")
+    df["AnoMes"] = df["DataLancamento"].dt.to_period('M').astype(str)
+
+    # Colunas de exibição
+    colunas = ["Classe", "AnoMes", "Lancamento", "MeioPagamento", "ValorPrincipal"]
+
+    # Builder
+    gb = GridOptionsBuilder.from_dataframe(df[colunas])
+    gb.configure_default_column(groupable=True, value=True, enableRowGroup=True)
+
+    # Agrupamento
+    gb.configure_column("Classe", rowGroup=True, hide=True)
+    gb.configure_column("AnoMes", rowGroup=True, hide=True)
+
+    # Coluna de valor
+    gb.configure_column(
+        "ValorPrincipal",
+        type=["numericColumn"],
+        aggFunc="sum",
+        valueFormatter="(params.value !== undefined) ? 'R$ ' + params.value.toFixed(2) : ''",
+        cellStyle={"textAlign": "right"}
+    )
+
+    # Detalhe ao clicar na linha agrupada
+    gb.configure_grid_options(
+        groupIncludeFooter=True,
+        groupIncludeTotalFooter=True,
+        masterDetail=True,
+        detailCellRendererParams={
+            "detailGridOptions": {
+                "columnDefs": [
+                    {"field": "DataLancamento"},
+                    {"field": "Lancamento"},
+                    {"field": "MeioPagamento"},
+                    {"field": "ValorPrincipal"}
+                ]
+            },
+            "getDetailRowData": JsCode("""
+                function(params) {
+                    params.successCallback([params.data]);
+                }
+            """)
+        },
+        autoGroupColumnDef={
+            "headerName": "Grupo",
+            "field": "Classe",
+            "cellRendererParams": {
+                "suppressCount": True
+            }
+        }
+    )
+
+    gridOptions = gb.build()
+
+    # Mostrar grid
+    AgGrid(
+        df[colunas],
+        gridOptions=gridOptions,
+        enable_enterprise_modules=True,
+        allow_unsafe_jscode=True,
+        theme="material",
+        height=600,
+        fit_columns_on_grid_load=True
+    )
+
+
+with tab3:
     st.write("Dynamic")
     # ...outros componentes...
         
@@ -40,8 +244,8 @@ with tab1:
         num_rows="dynamic", 
         use_container_width=True,
         column_config={
-            "DataDebito": st.column_config.TextColumn("Débito",width="small"),
-            "DataLancamento": st.column_config.TextColumn("Lançamento",width="small"),
+            "DataDebito": st.column_config.DateColumn("Débito",width="small"),
+            "DataLancamento": st.column_config.DateColumn("Lançamento",width="small"),
             "MeioPagamento": st.column_config.TextColumn("Meio",width="small"),
             "Lancamento": st.column_config.TextColumn("Lançamento"),
             "Ref1": st.column_config.TextColumn("Ref1",width="small"),
@@ -64,151 +268,6 @@ with tab1:
                         "Ref1", "Ref2", "ref3","Accurace"],
         disabled=["Id", "user_id","DataDebito"],
         hide_index=True,
-    )
-
-with tab2:
-    # st.dataframe(df)
-    # ...outros componentes...
-    
-    # Filtrar colunas visíveis no grid
-    colunas_visiveis = ['Classe', 'Lancamento', 'MeioPagamento', 'ValorPrincipal']
-
-    gb = GridOptionsBuilder.from_dataframe(df[colunas_visiveis])
-    gb.configure_side_bar() 
-    gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc='sum', editable=True)
-    gb.configure_column("Classe",rowGroup=True,pinned="left")  # ou "right"
-    gb.configure_column("ValorPrincipal", type=["numericColumn", "numberColumnFilter", "agNumberColumnFilter"], 
-                    aggFunc="sum", 
-                    valueFormatter="(params.value != null) ? 'R$ ' + params.value.toFixed(2) : ''",
-                    cellStyle={'textAlign': 'right'})
-        # Outras opções úteis
-    gb.configure_grid_options(domLayout='normal', suppressRowClickSelection=True,
-                            groupDefaultExpanded=-1,  # <- expande todos os grupos
-                            groupIncludeFooter=True,     # Subtotal por grupo
-                            groupIncludeTotalFooter=True,  # Total geral no final
-                            suppressAggFuncInHeader=True,
-                            autoGroupColumnDef={
-                                "headerName": "Classe",
-                                "field": "Classe",
-                                "cellRendererParams": {
-                                    "suppressCount": True
-                                }
-                            })
-    # gb.configure_selection("multiple", use_checkbox=True, groupSelectsChildren="Group checkbox select children")
-    
-    # gb.configure_grid_options(# ver mais detalher
-    #     masterDetail=True,
-    #     detailCellRendererParams={
-    #         "detailGridOptions": {
-    #             "columnDefs": [
-    #                 {"field": "Detalhes"}
-    #             ]
-    #         },
-    #         "getDetailRowData": JsCode("""
-    #             function(params) {
-    #                 params.successCallback([
-    #                     {Detalhes: params.data.Detalhes}
-    #                 ]);
-    #             }
-    #         """)
-    #     }
-    # )
-    
-    gridOptions = gb.build()
-
-    AgGrid(
-        df[colunas_visiveis],
-        gridOptions=gridOptions,
-        enable_enterprise_modules=True,  # permite pivot, agrupamento, etc.
-        allow_unsafe_jscode=True,
-        # theme="streamlit"
-        theme="material",
-        height=600,
-        groupable=True,
-        enable_pivot=True,
-        enable_pivot_mode=True,
-        filter=True,
-        fit_columns_on_grid_load=True
-    )
-
-with tab3:
-    # Simulando DataFrame original
-    df = pd.DataFrame({
-        "DataLancamento": pd.date_range(start="2025-01-01", periods=20),
-        "MeioPagamento": ["Cartão"] * 10 + ["PIX"] * 10,
-        "Lancamento": ['Padaria', 'Uber', 'Cinema', 'Restaurante', 'Ônibus', 'Bar', 'Mercado', 'Gasolina', 'Parque', 'Delivery',
-                    'Táxi', 'Teatro', 'Lanche', 'Farmácia', 'Posto', 'Sorvete', 'Streaming', 'Roupas', 'Bebidas', 'Doces'],
-        "Classe": ['Alimentação', 'Transporte', 'Lazer', 'Alimentação', 'Transporte', 'Lazer', 'Mercado', 'Transporte', 'Lazer', 'Delivery',
-                'Transporte', 'Cultura', 'Alimentação', 'Saúde', 'Transporte', 'Alimentação', 'Entretenimento', 'Roupas', 'Bebidas', 'Doces'],
-        "ValorPrincipal": [30, 15, 45, 60, 10, 35, 120, 50, 20, 80, 25, 90, 18, 33, 70, 12, 22, 40, 28, 8],
-    })
-
-    # Agrupar por lançamento e calcular acumulado percentual
-    gastos = df.groupby("Lancamento", as_index=False)["ValorPrincipal"].sum()
-    gastos = gastos.sort_values("ValorPrincipal", ascending=False)
-    gastos["Acumulado"] = gastos["ValorPrincipal"].cumsum()
-    total = gastos["ValorPrincipal"].sum()
-    gastos["PercentualAcumulado"] = gastos["Acumulado"] / total
-
-    # Classificar em grupo
-    gastos["Grupo"] = gastos["PercentualAcumulado"].apply(lambda x: "TOP 80%" if x <= 0.8 else "Outros")
-
-    # Juntar com df original
-    df = df.merge(gastos[["Lancamento", "Grupo"]], on="Lancamento", how="left")
-
-    # Contagem por grupo + lançamento
-    contagem = df.groupby(["Grupo", "Lancamento"]).size().reset_index(name="Quantidade")
-
-    # Gráfico
-    fig = px.bar(
-        contagem,
-        x="Quantidade",
-        y="Lancamento",
-        color="Grupo",
-        orientation="h",
-        color_discrete_map={"TOP 80%": "royalblue", "Outros": "orangered"},
-        title="Gastos que compõem 80% do total (frequência de lançamentos)"
-    )
-    fig.update_layout(yaxis={'categoryorder': 'total ascending'}, height=500)
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Filtro por grupo
-    grupo_selecionado = st.radio("Selecione o grupo de gastos para detalhar:", ["TOP 80%", "Outros"])
-
-    df_filtrado = df[df["Grupo"] == grupo_selecionado]
-
-    # AgGrid
-    colunas_visiveis = ['Classe', 'Lancamento', 'MeioPagamento', 'ValorPrincipal', 'DataLancamento']
-
-    gb = GridOptionsBuilder.from_dataframe(df_filtrado[colunas_visiveis])
-    gb.configure_side_bar()
-    gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc='sum', editable=False)
-    gb.configure_column("Classe", rowGroup=True, hide=True, pinned="left")
-    gb.configure_column("ValorPrincipal", type=["numericColumn", "numberColumnFilter", "agNumberColumnFilter"],
-                        aggFunc="sum",
-                        valueFormatter="(params.value != null) ? 'R$ ' + params.value.toFixed(2) : ''",
-                        cellStyle={'textAlign': 'right'})
-    gb.configure_grid_options(domLayout='normal',
-                            groupIncludeFooter=True,
-                            groupIncludeTotalFooter=True,
-                            suppressAggFuncInHeader=True,
-                            autoGroupColumnDef={
-                                "headerName": "Classe",
-                                "field": "Classe",
-                                "cellRendererParams": {"suppressCount": True}
-                            })
-
-    grid_options = gb.build()
-
-    st.markdown(f"### Detalhamento: {grupo_selecionado}")
-    AgGrid(
-        df_filtrado,
-        gridOptions=grid_options,
-        enable_enterprise_modules=True,
-        allow_unsafe_jscode=True,
-        theme="material",
-        height=500,
-        fit_columns_on_grid_load=True
     )
 
 
