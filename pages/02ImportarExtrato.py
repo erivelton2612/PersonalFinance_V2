@@ -1,7 +1,7 @@
 # app.py
 import streamlit as st
 import pandas as pd
-from function import *
+from backend.function import *
 
 if "token" not in st.session_state or not st.session_state.token:
     # st.warning("Você precisa estar logado para acessar esta página.")

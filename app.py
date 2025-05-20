@@ -1,7 +1,7 @@
 # app.py
 import streamlit as st
 import pandas as pd
-from function import *
+from backend.function import *
 
 st.set_page_config(page_title="Login", layout="wide")
 

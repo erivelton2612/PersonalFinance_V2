@@ -11,3 +11,4 @@ uvicorn
 Levenshtein==0.27.1
 PyJWT
 bcrypt
+plotly

@@ -1,8 +1,9 @@
 # app.py
 import streamlit as st
 import pandas as pd
-from function import *
-from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+from backend.function import *
+from st_aggrid import AgGrid, GridOptionsBuilder, JsCode, GridUpdateMode
+import plotly.express as px
 
 
 # LandPage.py
@@ -131,56 +132,84 @@ with tab2:
     )
 
 with tab3:
-            
-    # Garantir tipo numérico
-    df["ValorPrincipal"] = pd.to_numeric(df["ValorPrincipal"], errors='coerce')
+    # Simulando DataFrame original
+    df = pd.DataFrame({
+        "DataLancamento": pd.date_range(start="2025-01-01", periods=20),
+        "MeioPagamento": ["Cartão"] * 10 + ["PIX"] * 10,
+        "Lancamento": ['Padaria', 'Uber', 'Cinema', 'Restaurante', 'Ônibus', 'Bar', 'Mercado', 'Gasolina', 'Parque', 'Delivery',
+                    'Táxi', 'Teatro', 'Lanche', 'Farmácia', 'Posto', 'Sorvete', 'Streaming', 'Roupas', 'Bebidas', 'Doces'],
+        "Classe": ['Alimentação', 'Transporte', 'Lazer', 'Alimentação', 'Transporte', 'Lazer', 'Mercado', 'Transporte', 'Lazer', 'Delivery',
+                'Transporte', 'Cultura', 'Alimentação', 'Saúde', 'Transporte', 'Alimentação', 'Entretenimento', 'Roupas', 'Bebidas', 'Doces'],
+        "ValorPrincipal": [30, 15, 45, 60, 10, 35, 120, 50, 20, 80, 25, 90, 18, 33, 70, 12, 22, 40, 28, 8],
+    })
 
-    # Colunas visíveis
-    colunas_visiveis = ['Classe', 'Lancamento', 'MeioPagamento', 'ValorPrincipal']
+    # Agrupar por lançamento e calcular acumulado percentual
+    gastos = df.groupby("Lancamento", as_index=False)["ValorPrincipal"].sum()
+    gastos = gastos.sort_values("ValorPrincipal", ascending=False)
+    gastos["Acumulado"] = gastos["ValorPrincipal"].cumsum()
+    total = gastos["ValorPrincipal"].sum()
+    gastos["PercentualAcumulado"] = gastos["Acumulado"] / total
 
-    # Grid Options
-    gb = GridOptionsBuilder.from_dataframe(df[colunas_visiveis])
-    gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, editable=False)
+    # Classificar em grupo
+    gastos["Grupo"] = gastos["PercentualAcumulado"].apply(lambda x: "TOP 80%" if x <= 0.8 else "Outros")
 
-    gb.configure_column("Classe", rowGroup=True, hide=True)
+    # Juntar com df original
+    df = df.merge(gastos[["Lancamento", "Grupo"]], on="Lancamento", how="left")
 
-    # Configurar a coluna de valor com agregação e formatação
-    gb.configure_column(
-        "ValorPrincipal",
-        type=["numericColumn", "numberColumnFilter", "agNumberColumnFilter"],
-        aggFunc="sum",
-        valueFormatter="(params.value !== undefined) ? 'R$ ' + params.value.toFixed(2) : ''",
-        cellStyle={"textAlign": "right"}
+    # Contagem por grupo + lançamento
+    contagem = df.groupby(["Grupo", "Lancamento"]).size().reset_index(name="Quantidade")
+
+    # Gráfico
+    fig = px.bar(
+        contagem,
+        x="Quantidade",
+        y="Lancamento",
+        color="Grupo",
+        orientation="h",
+        color_discrete_map={"TOP 80%": "royalblue", "Outros": "orangered"},
+        title="Gastos que compõem 80% do total (frequência de lançamentos)"
     )
+    fig.update_layout(yaxis={'categoryorder': 'total ascending'}, height=500)
+    st.plotly_chart(fig, use_container_width=True)
 
-    # Configurações do grid
-    gb.configure_grid_options(
-        groupIncludeFooter=True,
-        groupIncludeTotalFooter=True,
-        groupDefaultExpanded=0,
-        autoGroupColumnDef={
-            "headerName": "Classe",
-            "field": "Classe",
-            "cellRendererParams": {
-                "suppressCount": True
-            }
-        }
-    )
+    # Filtro por grupo
+    grupo_selecionado = st.radio("Selecione o grupo de gastos para detalhar:", ["TOP 80%", "Outros"])
 
-    # Build e renderização
-    gridOptions = gb.build()
+    df_filtrado = df[df["Grupo"] == grupo_selecionado]
 
+    # AgGrid
+    colunas_visiveis = ['Classe', 'Lancamento', 'MeioPagamento', 'ValorPrincipal', 'DataLancamento']
+
+    gb = GridOptionsBuilder.from_dataframe(df_filtrado[colunas_visiveis])
+    gb.configure_side_bar()
+    gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc='sum', editable=False)
+    gb.configure_column("Classe", rowGroup=True, hide=True, pinned="left")
+    gb.configure_column("ValorPrincipal", type=["numericColumn", "numberColumnFilter", "agNumberColumnFilter"],
+                        aggFunc="sum",
+                        valueFormatter="(params.value != null) ? 'R$ ' + params.value.toFixed(2) : ''",
+                        cellStyle={'textAlign': 'right'})
+    gb.configure_grid_options(domLayout='normal',
+                            groupIncludeFooter=True,
+                            groupIncludeTotalFooter=True,
+                            suppressAggFuncInHeader=True,
+                            autoGroupColumnDef={
+                                "headerName": "Classe",
+                                "field": "Classe",
+                                "cellRendererParams": {"suppressCount": True}
+                            })
+
+    grid_options = gb.build()
+
+    st.markdown(f"### Detalhamento: {grupo_selecionado}")
     AgGrid(
-        df[colunas_visiveis],
-        gridOptions=gridOptions,
+        df_filtrado,
+        gridOptions=grid_options,
         enable_enterprise_modules=True,
         allow_unsafe_jscode=True,
         theme="material",
-        fit_columns_on_grid_load=True,
         height=500,
+        fit_columns_on_grid_load=True
     )
-    st.info("Gráficos dinâmicos podem ser criados na aba Tabela usando recursos do AgGrid.")
-
 
 
 
